@@ -1,3 +1,7 @@
+import makeWASocket from '@whiskeysockets/baileys'
+
+export type Sock = ReturnType<typeof makeWASocket>
+
 export type Result = {
   page: number
   results: Movie[]

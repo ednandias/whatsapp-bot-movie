@@ -5,7 +5,7 @@ export function renderStars(n: number) {
     stars += '⭐️'
   }
 
-  stars += `(${n}) de 10`
+  stars += ` ${n} de 10`
 
   return stars
 }

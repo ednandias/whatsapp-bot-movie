@@ -18,8 +18,6 @@ export async function fetchMovie(categoryId: number) {
 
     const movie = await chooseMovie(movies)
 
-    console.log({ movie })
-
     return movie
   } catch (err) {
     console.log(err)
