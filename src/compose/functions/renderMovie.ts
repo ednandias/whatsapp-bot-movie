@@ -34,7 +34,7 @@ export async function renderMovie(
     const image = movie.filename ? await getImage(movie?.filename) : null
     const content = buildMovieContent(movie)
 
-    logger({ movie, image })
+    logger({ movie })
 
     if (image) {
       await sock.sendMessage(userId, {
