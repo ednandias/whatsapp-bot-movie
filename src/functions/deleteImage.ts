@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-export async function removeImage(filename: string) {
+export async function deleteImage(filename: string) {
   try {
     const pathToFile = path.resolve(
       import.meta.dirname,

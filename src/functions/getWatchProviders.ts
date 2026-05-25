@@ -1,33 +1,24 @@
 import { api } from '../services/api.js'
+import { Sentry } from '../services/sentry.js'
 import type { WatchProvider } from '../types/index.js'
 
 export async function getWatchProviders(movieId: number, region: string) {
-  const response = await api.get<WatchProvider>(
-    `/movie/${movieId}/watch/providers`,
-  )
+  try {
+    const response = await api.get<WatchProvider>(
+      `/movie/${movieId}/watch/providers`,
+    )
 
-  const providers = response.data.results[region]
+    const providers = response.data.results[region]
 
-  if (
-    providers?.buy ||
-    providers?.flatrate ||
-    providers?.rent ||
-    providers?.ads
-  ) {
-    const { buy, flatrate, rent, ads } = providers
+    if (
+      providers?.buy ||
+      providers?.flatrate ||
+      providers?.rent ||
+      providers?.ads
+    ) {
+      const { buy, flatrate, rent, ads } = providers
 
-    const buyFormatted = buy?.reduce((acc, value, idx, arr) => {
-      const isLast = idx + 1 === arr.length
-
-      if (value.provider_name) {
-        acc += `* ${value.provider_name}${!isLast ? `\n` : ''}`
-      }
-
-      return acc
-    }, 'Disponível para comprar em:\n')
-
-    const flatrateFormatted = [...(flatrate ?? []), ...(ads ?? [])]?.reduce(
-      (acc, value, idx, arr) => {
+      const buyFormatted = buy?.reduce((acc, value, idx, arr) => {
         const isLast = idx + 1 === arr.length
 
         if (value.provider_name) {
@@ -35,26 +26,41 @@ export async function getWatchProviders(movieId: number, region: string) {
         }
 
         return acc
-      },
-      'Disponível nas plataformas:\n',
-    )
+      }, 'Disponível para comprar em:\n')
 
-    const rentFormatted = rent?.reduce((acc, value, idx, arr) => {
-      const isLast = idx + 1 === arr.length
+      const flatrateFormatted = [...(flatrate ?? []), ...(ads ?? [])]?.reduce(
+        (acc, value, idx, arr) => {
+          const isLast = idx + 1 === arr.length
 
-      if (value.provider_name) {
-        acc += `* ${value.provider_name}${!isLast ? `\n` : ''}`
+          if (value.provider_name) {
+            acc += `* ${value.provider_name}${!isLast ? `\n` : ''}`
+          }
+
+          return acc
+        },
+        'Disponível nas plataformas:\n',
+      )
+
+      const rentFormatted = rent?.reduce((acc, value, idx, arr) => {
+        const isLast = idx + 1 === arr.length
+
+        if (value.provider_name) {
+          acc += `* ${value.provider_name}${!isLast ? `\n` : ''}`
+        }
+
+        return acc
+      }, 'Disponível para alugar em:\n')
+
+      return {
+        flatrate:
+          flatrateFormatted ?? '*Não disponível em nenhuma plataforma*.',
+        rent: rentFormatted ?? '*Não disponível para aluguel*.',
+        buy: buyFormatted ?? '*Não disponível para compra*.',
       }
-
-      return acc
-    }, 'Disponível para alugar em:\n')
-
-    return {
-      flatrate: flatrateFormatted ?? '*Não disponível em nenhuma plataforma*.',
-      rent: rentFormatted ?? '*Não disponível para aluguel*.',
-      buy: buyFormatted ?? '*Não disponível para compra*.',
+    } else {
+      return null
     }
-  } else {
-    return null
+  } catch (err) {
+    Sentry.captureException(err, { extra: { movieId, region } })
   }
 }

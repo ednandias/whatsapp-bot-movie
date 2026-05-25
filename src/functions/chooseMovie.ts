@@ -4,7 +4,7 @@ import { fetchPoster } from './fetchPoster.js'
 import { getWatchProviders } from './getWatchProviders.js'
 
 export async function chooseMovie(movies: Movie[]) {
-  const randomIndex = Math.floor(Math.random() * movies.length + 1)
+  const randomIndex = Math.floor(Math.random() * movies.length)
 
   const movie = movies[randomIndex]
 
@@ -12,7 +12,7 @@ export async function chooseMovie(movies: Movie[]) {
     const { id, title, overview, release_date, poster_path, vote_average } =
       movie
 
-    const filename = await fetchPoster(poster_path, title)
+    const filename = await fetchPoster(poster_path, title).catch(() => null)
 
     const providers = await getWatchProviders(id, 'BR')
 
@@ -23,11 +23,7 @@ export async function chooseMovie(movies: Movie[]) {
       release_date: format(release_date, 'yyyy'),
       filename,
       vote_average: Math.floor(vote_average),
-      providers: providers
-        ? {
-            ...providers,
-          }
-        : null,
+      providers: providers ? { ...providers } : null,
     }
   }
 

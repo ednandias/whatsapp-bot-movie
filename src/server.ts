@@ -6,6 +6,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys'
 import qrcode from 'qrcode-terminal'
 import Compose from './compose/index.js'
+import { initSentry } from './services/sentry.js'
 
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys')
@@ -43,12 +44,14 @@ async function connectToWhatsApp() {
     }
   })
 
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return // 'notify' = mensagem nova, 'append' = histórico
+
     for (const m of messages) {
       const userId = m.key.remoteJid!
       const userMessage = m.message?.conversation?.toLowerCase()?.trim() ?? ''
 
-      if (m.key.fromMe) continue
+      if (m.key.fromMe) return
 
       await compose.action(userId, userMessage)
     }
@@ -59,4 +62,5 @@ async function connectToWhatsApp() {
 }
 
 // run in main file
+initSentry()
 connectToWhatsApp()

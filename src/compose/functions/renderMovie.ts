@@ -1,8 +1,8 @@
 import { genres } from '../../data/genres.js'
-import { removeImage } from '../../functions/deleteImage.js'
+import { buildMovieContent } from '../../functions/buildMovieContent.js'
+import { deleteImage } from '../../functions/deleteImage.js'
 import { fetchMovie } from '../../functions/fetchMovie.js'
 import { getImage } from '../../functions/getImage.js'
-import { renderStars } from '../../functions/renderStars.js'
 import { showLoading } from '../../functions/showLoading.js'
 import type { Sock } from '../../types/index.js'
 
@@ -19,30 +19,26 @@ export async function renderMovie(
 
   const movie = await fetchMovie(selectedGenre)
 
-  if (movie?.id) {
-    const movieProviders = movie.providers
-      ? `💰️ ${movie.providers.flatrate}\n\n🏠️ ${movie.providers.rent}\n\n💰️ ${movie.providers.buy}`
-      : '❌🇧🇷 Filme não disponível no Brasil.'
+  if (!movie?.id) {
+    await sock.sendMessage(userId, {
+      text: '❌ Erro ao buscar filme, tente novamente.',
+    })
+    return
+  }
 
-    const stars = renderStars(movie.vote_average)
-
-    const movieContent = `*${movie.title} (${movie.release_date})*\n\n${movie.overview}\n\n${stars}\n\n${movieProviders}\n\n_Todos os dados fornecidos por *The Movie Database (TMDB)*_.`
-
-    const image = await getImage(movie?.filename ?? '')
+  try {
+    const image = movie.filename ? await getImage(movie?.filename) : null
+    const content = buildMovieContent(movie)
 
     if (image) {
       await sock.sendMessage(userId, {
         image,
-        caption: movieContent,
+        caption: content,
       })
     } else {
-      await sock.sendMessage(userId, { text: movieContent })
+      await sock.sendMessage(userId, { text: content })
     }
-
-    await removeImage(movie?.filename ?? '')
-  } else {
-    await sock.sendMessage(userId, {
-      text: '❌ Houve um erro ao buscar filme, tente novamente em alguns minutos.',
-    })
+  } finally {
+    if (movie.filename) await deleteImage(movie?.filename)
   }
 }

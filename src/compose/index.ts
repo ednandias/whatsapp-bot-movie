@@ -1,109 +1,140 @@
+import { redis } from '../services/redis.js'
+import type { Sock } from '../types/index.js'
 import { chooseCategory } from './functions/chooseCategory.js'
 import { renderMovie } from './functions/renderMovie.js'
-import type { Sock } from '../types/index.js'
 import { genres } from '../data/genres.js'
 
-export type Action = {
+// TTL de 10 minutos — se o usuário sumir, o estado expira sozinho
+const STATE_TTL_SECONDS = 60 * 10
+
+export type SerializableAction = {
   name: string
   isActive: boolean
   hasWorked: boolean
+}
+
+export type Action = SerializableAction & {
   input: {
     shouldBe: (msg: string) => boolean
-    exec: () => Promise<void>
+    exec: (msg: string) => Promise<void>
     fallback: string
   }
 }
 
 export default class Compose {
   private readonly sock: Sock
-  private state: Map<string, Action[]> = new Map()
 
   constructor(sock: Sock) {
     this.sock = sock
   }
 
-  private setActions(userId: string, userMessage: string): Action[] {
-    const defaultOptions = {
-      isActive: false,
-      hasWorked: false,
-    }
-
-    return [
-      {
-        ...defaultOptions,
-        name: 'choose_category',
-        isActive: true,
-        input: {
-          shouldBe: (msg: string) => msg === '!filme',
-          exec: () => chooseCategory(this.sock, userId),
-          fallback: `Digite *!filme* para que possamos prosseguir.`,
-        },
-      },
-      {
-        ...defaultOptions,
-        name: 'render_movie',
-        input: {
-          shouldBe: (msg: string) =>
-            genres.findIndex((genre) => String(genre.seqId) === msg) !== -1
-              ? true
-              : false,
-          exec: () => renderMovie(this.sock, userId, userMessage),
-          fallback: `Categoria inválida!`,
-        },
-      },
+  // As funções (closures) não são serializáveis — só persistimos o estado puro
+  private buildActions(
+    userId: string,
+    savedState?: SerializableAction[],
+  ): Action[] {
+    const defaults = savedState ?? [
+      { name: 'choose_category', isActive: true, hasWorked: false },
+      { name: 'render_movie', isActive: false, hasWorked: false },
     ]
+
+    return defaults.map((s) => {
+      if (s.name === 'choose_category') {
+        return {
+          ...s,
+          input: {
+            shouldBe: (msg) => msg === '!filme',
+            exec: () => chooseCategory(this.sock, userId),
+            fallback: 'Digite *!filme* para que possamos prosseguir.',
+          },
+        }
+      }
+
+      return {
+        ...s,
+        input: {
+          shouldBe: (msg) =>
+            genres.findIndex((g) => String(g.seqId) === msg) !== -1,
+          exec: (msg) => renderMovie(this.sock, userId, msg),
+          fallback: 'Categoria inválida!',
+        },
+      }
+    })
   }
 
-  private nextAction(userId: string, idx: number) {
-    let actions = this.state.get(userId)
+  private stateKey(userId: string) {
+    return `compose:state:${userId}`
+  }
 
-    if (actions && actions?.length > 0) {
-      const action = actions[idx]
-      const nxAction = actions[idx + 1]
+  private async getState(userId: string): Promise<Action[] | null> {
+    const raw = await redis.get(this.stateKey(userId))
+    if (!raw) return null
 
-      if (action) {
-        actions = actions.with(idx, {
-          ...action,
-          isActive: false,
-          hasWorked: true,
-        })
-      }
+    const saved: SerializableAction[] = JSON.parse(raw)
+    return this.buildActions(userId, saved)
+  }
 
-      if (nxAction) {
-        actions = actions.with(idx + 1, {
-          ...nxAction,
-          isActive: true,
-        })
+  private async setState(userId: string, actions: Action[]) {
+    // Só persiste a parte serializável — as funções são reconstruídas em buildActions
+    const serializable: SerializableAction[] = actions.map(
+      ({ name, isActive, hasWorked }) => ({
+        name,
+        isActive,
+        hasWorked,
+      }),
+    )
 
-        this.state.set(userId, actions)
-      }
+    await redis.set(
+      this.stateKey(userId),
+      JSON.stringify(serializable),
+      'EX',
+      STATE_TTL_SECONDS,
+    )
+  }
 
-      // dentro de nextAction, quando não há próxima ação
-      if (!nxAction) {
-        this.state.delete(userId) // permite recomeçar o fluxo
-      }
+  private async deleteState(userId: string) {
+    await redis.del(this.stateKey(userId))
+  }
+
+  private async nextAction(userId: string, actions: Action[], idx: number) {
+    const action = actions[idx]
+    const nxAction = actions[idx + 1]
+
+    let updated = actions
+
+    if (action) {
+      updated = updated.with(idx, {
+        ...action,
+        isActive: false,
+        hasWorked: true,
+      })
+    }
+
+    if (nxAction) {
+      updated = updated.with(idx + 1, { ...nxAction, isActive: true })
+      await this.setState(userId, updated)
+    } else {
+      await this.deleteState(userId)
     }
   }
 
   async action(userId: string, userMessage: string) {
-    if (!this.state.has(userId)) {
-      this.state.set(userId, this.setActions(userId, userMessage))
-    }
+    let actions = await this.getState(userId)
 
-    const actions = this.state.get(userId)
-    if (!actions) return
+    if (!actions) {
+      actions = this.buildActions(userId)
+      await this.setState(userId, actions)
+    }
 
     for (const [index, action] of actions.entries()) {
       if (action.isActive && !action.hasWorked) {
         const { shouldBe, exec, fallback } = action.input
 
         if (shouldBe(userMessage)) {
-          await exec()
-          this.nextAction(userId, index)
+          await exec(userMessage)
+          await this.nextAction(userId, actions, index)
         } else {
-          this.sock.sendMessage(userId, {
-            text: fallback,
-          })
+          await this.sock.sendMessage(userId, { text: fallback })
         }
       }
     }
