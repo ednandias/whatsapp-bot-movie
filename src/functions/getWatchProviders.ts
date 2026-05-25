@@ -1,6 +1,6 @@
 import { api } from '../services/api.js'
-import { Sentry } from '../services/sentry.js'
 import type { WatchProvider } from '../types/index.js'
+import { catchErr } from '../utils/error.js'
 
 export async function getWatchProviders(movieId: number, region: string) {
   try {
@@ -61,6 +61,6 @@ export async function getWatchProviders(movieId: number, region: string) {
       return null
     }
   } catch (err) {
-    Sentry.captureException(err, { extra: { movieId, region } })
+    catchErr(err, { movieId, region })
   }
 }

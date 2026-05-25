@@ -1,7 +1,7 @@
 import { chooseMovie } from './chooseMovie.js'
 import { api } from '../services/api.js'
 import type { Result } from '../types/index.js'
-import { Sentry } from '../services/sentry.js'
+import { catchErr } from '../utils/error.js'
 
 export async function fetchMovie(categoryId: number) {
   try {
@@ -21,10 +21,6 @@ export async function fetchMovie(categoryId: number) {
 
     return movie
   } catch (err) {
-    Sentry.captureException(err, {
-      extra: {
-        categoryId,
-      },
-    })
+    catchErr(err, { categoryId })
   }
 }
