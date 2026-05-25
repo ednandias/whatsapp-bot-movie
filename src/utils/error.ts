@@ -6,6 +6,4 @@ export function catchErr(err: unknown, params?: Record<string, unknown>) {
   } else {
     console.log(err)
   }
-
-  throw err
 }
