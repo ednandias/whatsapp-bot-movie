@@ -4,7 +4,9 @@
   "type": "module",
   "main": "dist/src/server.js",
   "scripts": {
-    "dev": "tsx src/server.ts"
+    "start": "node dist/src/server.js",
+    "dev": "tsx src/server.ts",
+    "build": "tsc"
   },
   "dependencies": {
     "@hapi/boom": "10.0.1",
