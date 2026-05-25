@@ -5,6 +5,7 @@ import { fetchMovie } from '../../functions/fetchMovie.js'
 import { getImage } from '../../functions/getImage.js'
 import { showLoading } from '../../functions/showLoading.js'
 import type { Sock } from '../../types/index.js'
+import { logger } from '../../utils/logger.js'
 
 export async function renderMovie(
   sock: Sock,
@@ -15,6 +16,8 @@ export async function renderMovie(
     genres.find((genre) => String(genre.seqId) === userMessage)?.id ??
     genres[0]!.id
 
+  logger({ userId, userMessage, selectedGenre })
+
   await showLoading(sock, userId)
 
   const movie = await fetchMovie(selectedGenre)
@@ -23,12 +26,15 @@ export async function renderMovie(
     await sock.sendMessage(userId, {
       text: '❌ Erro ao buscar filme, tente novamente.',
     })
+
     return
   }
 
   try {
     const image = movie.filename ? await getImage(movie?.filename) : null
     const content = buildMovieContent(movie)
+
+    logger({ movie, image })
 
     if (image) {
       await sock.sendMessage(userId, {

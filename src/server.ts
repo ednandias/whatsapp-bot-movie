@@ -7,12 +7,12 @@ import makeWASocket, {
 import qrcode from 'qrcode-terminal'
 import Compose from './compose/index.js'
 import { initSentry } from './services/sentry.js'
+import { logger } from './utils/logger.js'
 
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys')
 
   const sock = makeWASocket({
-    // can provide additional config here
     auth: state,
   })
 
@@ -28,24 +28,23 @@ async function connectToWhatsApp() {
         (lastDisconnect?.error as Boom).output.statusCode !==
         DisconnectReason.loggedOut
 
-      // console.log(
-      //   'connection closed due to ',
-      //   lastDisconnect?.error,
-      //   ', reconnecting ',
-      //   shouldReconnect,
-      // )
+      logger(
+        'connection closed due to ',
+        lastDisconnect?.error,
+        ', reconnecting ',
+        shouldReconnect,
+      )
 
-      // reconnect if not logged out
       if (shouldReconnect) {
         connectToWhatsApp()
       }
     } else if (connection === 'open') {
-      // console.log('opened connection')
+      logger('opened connection')
     }
   })
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return // 'notify' = mensagem nova, 'append' = histórico
+    if (type !== 'notify') return
 
     for (const m of messages) {
       const userId = m.key.remoteJid!
@@ -57,10 +56,8 @@ async function connectToWhatsApp() {
     }
   })
 
-  // to storage creds (session info) when it updates
   sock.ev.on('creds.update', saveCreds)
 }
 
-// run in main file
 initSentry()
 connectToWhatsApp()

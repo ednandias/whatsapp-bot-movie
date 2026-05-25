@@ -4,7 +4,6 @@ import { chooseCategory } from './functions/chooseCategory.js'
 import { renderMovie } from './functions/renderMovie.js'
 import { genres } from '../data/genres.js'
 
-// TTL de 10 minutos — se o usuário sumir, o estado expira sozinho
 const STATE_TTL_SECONDS = 60 * 10
 
 export type SerializableAction = {
@@ -28,7 +27,6 @@ export default class Compose {
     this.sock = sock
   }
 
-  // As funções (closures) não são serializáveis — só persistimos o estado puro
   private buildActions(
     userId: string,
     savedState?: SerializableAction[],
